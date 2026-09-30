@@ -12,6 +12,7 @@ import android.view.*
 import android.view.accessibility.AccessibilityEvent
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.TextView
 
 class ClickService : AccessibilityService() {
 
@@ -19,6 +20,7 @@ class ClickService : AccessibilityService() {
     private var dot: View? = null
     private var panel: LinearLayout? = null
     private lateinit var dotParams: WindowManager.LayoutParams
+    private lateinit var panelParams: WindowManager.LayoutParams
     private lateinit var startBtn: Button
     private lateinit var speedBtn: Button
     private val handler = Handler(Looper.getMainLooper())
@@ -52,12 +54,12 @@ class ClickService : AccessibilityService() {
     }
 
     private fun addDot() {
-        val size = (56 * resources.displayMetrics.density).toInt()
+        val size = (28 * resources.displayMetrics.density).toInt()   // pehle 56 tha, ab 50% chhota
         val v = View(this).apply {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
                 setColor(Color.argb(140, 255, 0, 0))
-                setStroke(4, Color.WHITE)
+                setStroke(3, Color.WHITE)
             }
         }
         dotParams = WindowManager.LayoutParams(
@@ -84,6 +86,18 @@ class ClickService : AccessibilityService() {
     }
 
     private fun addPanel() {
+        val density = resources.displayMetrics.density
+
+        // Drag handle: isko pakad ke panel ko kahin bhi le jao
+        val handle = TextView(this).apply {
+            text = "☰ Drag"
+            setTextColor(Color.WHITE)
+            setBackgroundColor(Color.argb(200, 60, 60, 60))
+            gravity = Gravity.CENTER
+            val pad = (8 * density).toInt()
+            setPadding(pad, pad, pad, pad)
+        }
+
         startBtn = Button(this).apply { text = "START"; setOnClickListener { toggle() } }
         speedBtn = Button(this).apply {
             text = "${intervalMs}ms"
@@ -93,19 +107,34 @@ class ClickService : AccessibilityService() {
             }
         }
         val closeBtn = Button(this).apply { text = "✕ Close"; setOnClickListener { shutdown() } }
+
         val p = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            addView(startBtn); addView(speedBtn); addView(closeBtn)
+            addView(handle); addView(startBtn); addView(speedBtn); addView(closeBtn)
         }
         panel = p
-        val lp = WindowManager.LayoutParams(
+
+        panelParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
-        ).apply { gravity = Gravity.TOP or Gravity.END; x = 16; y = 300 }
-        wm.addView(p, lp)
+        ).apply { gravity = Gravity.TOP or Gravity.START; x = 100; y = 300 }
+
+        var sx = 0f; var sy = 0f; var px = 0; var py = 0
+        handle.setOnTouchListener { _, e ->
+            when (e.action) {
+                MotionEvent.ACTION_DOWN -> { sx = e.rawX; sy = e.rawY; px = panelParams.x; py = panelParams.y }
+                MotionEvent.ACTION_MOVE -> {
+                    panelParams.x = px + (e.rawX - sx).toInt()
+                    panelParams.y = py + (e.rawY - sy).toInt()
+                    wm.updateViewLayout(p, panelParams)
+                }
+            }
+            true
+        }
+        wm.addView(p, panelParams)
     }
 
     private fun toggle() {
